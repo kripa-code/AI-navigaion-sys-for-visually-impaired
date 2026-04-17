@@ -7,20 +7,3 @@ The following packages should be updated for best compatibility with the install
 Your project may not work correctly until you install the expected versions of the packages.
 Waiting on http://localhost:8081
 Logs for your project will appear below.
-node:events:496
-      throw er; // Unhandled 'error' event
-      ^
-
-Error: EMFILE: too many open files, watch
-    at FSEvent.FSWatcher._handle.onchange (node:internal/fs/watchers:207:21)
-Emitted 'error' event on NodeWatcher instance at:
-    at FSWatcher._checkedEmitError (/Users/srujangowda/Desktop/BlindBuddy/frontend/node_modules/metro-file-map/src/watchers/NodeWatcher.js:82:12)
-    at FSWatcher.emit (node:events:518:28)
-    at FSEvent.FSWatcher._handle.onchange (node:internal/fs/watchers:213:12) {
-  errno: -24,
-  syscall: 'watch',
-  code: 'EMFILE',
-  filename: null
-}
-
-Node.js v22.14.0
