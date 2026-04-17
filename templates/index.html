@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlindBuddy Vision Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <span>BlindBuddy<span class="highlight">Vision</span></span>
+            </div>
+            <div class="status-badge">
+                <span class="dot pulse"></span>
+                System Active
+            </div>
+        </header>
+
+        <main class="dashboard">
+            <div class="feed-section glass-panel">
+                <div class="panel-header">
+                    <h2>Live Detection Feed</h2>
+                    <p>Real-time object and environment analysis</p>
+                </div>
+                <div class="video-container">
+                    <img src="{{ url_for('video_feed') }}" alt="Live Video Feed missing" class="video-stream">
+                    <div class="overlay-hud">
+                        <div class="hud-item label-objects">Processing Objects</div>
+                        <div class="hud-item label-doors">Tracking Doors</div>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="sidebar">
+                <div class="glass-panel stats-panel">
+                    <h3>Intelligence Status</h3>
+                    <div class="stat-card">
+                        <span class="stat-label">Model Engine</span>
+                        <span class="stat-value">MobileNet v3 SSD</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Environment</span>
+                        <span class="stat-value">Computer Vision Active</span>
+                    </div>
+                    <div class="stat-card active-pulse">
+                        <span class="stat-label">Door Processor</span>
+                        <span class="stat-value text-accent">Engaged</span>
+                    </div>
+                </div>
+
+                <div class="glass-panel help-panel">
+                    <h3>System Overview</h3>
+                    <p>This web interface securely routes the BlindBuddy object recognition feeds, mapping local object intelligence to a responsive remote dashboard for real-time guidance monitoring.</p>
+                </div>
+            </aside>
+        </main>
+    </div>
+</body>
+</html>
