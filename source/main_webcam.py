@@ -36,6 +36,32 @@ net.setInputScale(1.0/127.5)
 net.setInputMean((127.5,127.5,127.5))
 net.setInputSwapRB(True)
 
+# ── Door detection helper ──────────────────────────────────────────────────────
+def detect_doors(image):
+    gray        = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred     = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges       = cv2.Canny(blurred, 50, 150)
+    kernel      = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    dilated     = cv2.dilate(edges, kernel, iterations=2)
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    door_boxes = []
+    img_h, img_w = image.shape[:2]
+
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        area        = w * h
+        aspect      = h / float(w) if w != 0 else 0          # doors are taller than wide
+        rel_area    = area / float(img_h * img_w)             # fraction of frame
+
+        # Filter by aspect ratio (1.5–4.5), size (2–40 % of frame), and
+        # minimum absolute dimensions to skip tiny noise contours
+        if 1.5 < aspect < 4.5 and 0.02 < rel_area < 0.40 and w > 40 and h > 80:
+            door_boxes.append((x, y, w, h))
+
+    return door_boxes
+# ──────────────────────────────────────────────────────────────────────────────
+
 while True:
     # Start Webcam
     success, image = cap.read()
@@ -53,13 +79,21 @@ while True:
     indicies = cv2.dnn.NMSBoxes(bbox,confs,thres,nms_threshold)
 
     # add boxes for each detection on each frame
-    for i in indicies:
-        i = i[0] #Get the bounding box info
-        box = bbox[i]
-        x,y,w,h = box[0],box[1],box[2],box[3]
-        cv2.rectangle(image,(x,y),(x+w,h+y),color = (0,255,0), thickness =2)
-        cv2.putText(image,classNames[classIds[i][0]-1],(box[0]+10,box[1]+30),
-                        cv2.FONT_HERSHEY_COMPLEX,1,(0,255,0),2)
+    if len(indicies) > 0:
+        for i in np.array(indicies).flatten():
+            box = bbox[i]
+            x,y,w,h = box[0],box[1],box[2],box[3]
+            cv2.rectangle(image,(x,y),(x+w,h+y),color = (0,255,0), thickness =2)
+            cv2.putText(image,classNames[np.array(classIds).flatten()[i]-1],(box[0]+10,box[1]+30),
+                            cv2.FONT_HERSHEY_COMPLEX,1,(0,255,0),2)
+
+    # ── Draw door detections (blue boxes) ─────────────────────────────────────
+    door_boxes = detect_doors(image)
+    for (dx, dy, dw, dh) in door_boxes:
+        cv2.rectangle(image, (dx, dy), (dx + dw, dy + dh), color=(255, 0, 0), thickness=2)
+        cv2.putText(image, "Door", (dx + 10, dy + 30),
+                    cv2.FONT_HERSHEY_COMPLEX, 1, (255, 0, 0), 2)
+    # ──────────────────────────────────────────────────────────────────────────
 
     # Show output until CTRL+C
     cv2.imshow("Output", image)
@@ -71,6 +105,3 @@ while True:
             #cv2.rectangle(image,box,color=(0,255,0), thickness=2)
             #cv2.putText(image,classNames[classId-1],(box[0]+10,box[1]+30),
                         #cv2.FONT_HERSHEY_COMPLEX,1,(0,255,0),2)
-
-
-    
