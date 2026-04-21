@@ -1,0 +1,9 @@
+name: Local Config
+version: 1.0.0
+schema: v1
+
+models:
+  - title: Gemini Pro
+    provider: google
+    model: gemini-1.5-pro
+    apiKey: AIzaSyAz_sKkR2sYiixG3iMQohs3OXsnreaVuY4

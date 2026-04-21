@@ -74,8 +74,8 @@ async def session(websocket: WebSocket):
                     except Exception as e:
                         print(f"Vision error in WS: {e}")
 
-                # 3. AI Reasoning
-                result = get_guidance(nav_instruction, vision_scene)
+                # 3. AI Reasoning (Multimodal GPT-4o Vision + YOLO bounds)
+                result = get_guidance(nav_instruction, vision_scene, b64_image)
                 guidance_text = result["guidance"]
                 urgency = result["urgency"]
 

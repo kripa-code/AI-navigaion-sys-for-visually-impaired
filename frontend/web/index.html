@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BlindBuddy — AI Navigation Assistant</title>
+  <meta name="description" content="Real-time AI-powered navigation assistant for visually impaired users. Uses your camera, GPS, and voice to guide you safely." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Tokens ────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0e1a;
+      --surface:   #111827;
+      --card:      #1a2235;
+      --border:    #2a3a55;
+      --accent:    #3b82f6;
+      --accent2:   #6366f1;
+      --green:     #10b981;
+      --yellow:    #f59e0b;
+      --red:       #ef4444;
+      --text:      #f1f5f9;
+      --muted:     #94a3b8;
+      --radius:    14px;
+      --shadow:    0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Layout ────────────────────────────────────────── */
+    #app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .logo span { font-size: 1.5rem; }
+
+    #status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: rgba(16,185,129,0.12);
+      color: var(--green);
+      border: 1px solid rgba(16,185,129,0.3);
+      transition: all 0.4s;
+    }
+    #status-pill.warn { background: rgba(245,158,11,0.12); color: var(--yellow); border-color: rgba(245,158,11,0.3); }
+    #status-pill.err  { background: rgba(239,68,68,0.12);  color: var(--red);    border-color: rgba(239,68,68,0.3); }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── Main grid ─────────────────────────────────────── */
+    main {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    /* ── Left panel ────────────────────────────────────── */
+    #panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 20px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* Destination input */
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: var(--muted); }
+
+    button {
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      box-shadow: 0 4px 15px rgba(59,130,246,0.35);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.5); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-icon {
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 1.1rem;
+      border: 1px solid var(--border);
+    }
+    .btn-icon:hover { background: rgba(255,255,255,0.1); }
+
+    .btn-stop {
+      background: rgba(239,68,68,0.15);
+      color: var(--red);
+      border: 1px solid rgba(239,68,68,0.3);
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      width: 100%;
+      margin-top: 4px;
+    }
+    .btn-stop:hover { background: rgba(239,68,68,0.25); }
+
+    /* Urgency banner */
+    #urgency-banner {
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      transition: all 0.4s;
+      border: 1px solid transparent;
+    }
+    #urgency-banner.low    { background: rgba(16,185,129,0.1);  border-color: rgba(16,185,129,0.3);  }
+    #urgency-banner.medium { background: rgba(245,158,11,0.1);  border-color: rgba(245,158,11,0.3);  }
+    #urgency-banner.high   { background: rgba(239,68,68,0.12);  border-color: rgba(239,68,68,0.4);
+                             animation: shake 0.3s ease; }
+
+    @keyframes shake {
+      0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)}
+    }
+
+    .urgency-icon { font-size: 1.6rem; line-height: 1; flex-shrink: 0; }
+    .urgency-text { font-size: 0.95rem; font-weight: 500; line-height: 1.45; }
+
+    /* Detections list */
+    #detections-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .detection-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      border: 1px solid var(--border);
+    }
+    .det-label { font-weight: 600; }
+    .det-meta  { color: var(--muted); font-size: 0.75rem; }
+    .det-badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+    .badge-high   { background: rgba(239,68,68,0.2);   color: var(--red); }
+    .badge-medium { background: rgba(245,158,11,0.2);  color: var(--yellow); }
+    .badge-low    { background: rgba(16,185,129,0.2);  color: var(--green); }
+
+    /* Nav steps */
+    #steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      transition: all 0.3s;
+      border: 1px solid transparent;
+    }
+    .step-item.active {
+      background: rgba(59,130,246,0.1);
+      color: var(--text);
+      border-color: rgba(59,130,246,0.3);
+    }
+    .step-item.done { opacity: 0.4; }
+    .step-num { font-weight: 700; color: var(--accent); flex-shrink: 0; }
+
+    /* GPS coords */
+    .coords {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .coords span { color: var(--text); font-weight: 500; }
+
+    /* ── Right panel: Map + Camera ─────────────────────── */
+    #right {
+      display: grid;
+      grid-template-rows: 1fr 220px;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #111827;
+    }
+
+    /* Camera strip */
+    #camera-strip {
+      background: #0a0e1a;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: relative;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 1fr 240px;
+    }
+    #camera-video { width: 100%; height: auto; display: block; }
+    #canvas-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 5;
+    }
+    #canvas-capture { display: none; }
+
+    .camera-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .camera-info-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Progress ring */
+    .ring-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .ring-svg { transform: rotate(-90deg); }
+    .ring-track { fill: none; stroke: var(--border); stroke-width: 4; }
+    .ring-fill  { fill: none; stroke: var(--accent); stroke-width: 4;
+                  stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100;
+                  transition: stroke-dashoffset 1.5s linear; }
+    .ring-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .ring-label strong { color: var(--text); display: block; font-size: 0.9rem; }
+
+    /* Camera toggle */
+    .cam-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-cam {
+      background: rgba(59,130,246,0.12);
+      color: var(--accent);
+      border: 1px solid rgba(59,130,246,0.3);
+      padding: 7px 14px;
+      font-size: 0.8rem;
+      border-radius: 8px;
+    }
+    .btn-cam:hover { background: rgba(59,130,246,0.22); }
+    .btn-cam.active { background: rgba(59,130,246,0.3); }
+
+    /* ── Voice mic button ──────────────────────────────── */
+    #mic-btn {
+      position: fixed;
+      bottom: 32px;
+      right: 32px;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      font-size: 1.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 30px rgba(59,130,246,0.5);
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      z-index: 200;
+    }
+    #mic-btn:hover { transform: scale(1.1); box-shadow: 0 12px 40px rgba(59,130,246,0.6); }
+    #mic-btn.recording { background: linear-gradient(135deg, var(--red), #c026d3);
+                          animation: mic-pulse 1s infinite; }
+    @keyframes mic-pulse { 0%,100%{box-shadow:0 8px 30px rgba(239,68,68,0.5)}
+                           50%{box-shadow:0 8px 50px rgba(239,68,68,0.9)} }
+
+    /* ── Empty states ──────────────────────────────────── */
+    .empty {
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-align: center;
+      padding: 18px 0;
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* ── Autocomplete Dropdown ─────────────────────────── */
+    .pac-container {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 4px;
+      box-shadow: var(--shadow);
+      font-family: inherit;
+      z-index: 9999;
+    }
+    .pac-item {
+      padding: 8px 12px;
+      color: var(--text);
+      border-top: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .pac-item:hover { background: rgba(255,255,255,0.05); }
+    .pac-item-query { font-size: 0.9rem; color: #fff; font-weight: 600; }
+    .pac-icon { display: none; }
+    .pac-logo::after { display: none; }
+
+    /* ── Responsive ────────────────────────────────────── */
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+      #panel { max-height: 50vh; }
+      #right { grid-template-rows: 1fr auto; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">
+      <span>🦯</span> BlindBuddy
+    </div>
+    <div id="status-pill">
+      <div class="dot"></div>
+      <span id="status-text">Connecting…</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- ── Left Panel ── -->
+    <div id="panel">
+
+      <!-- Destination -->
+      <div class="card">
+        <div class="card-title">📍 Destination</div>
+        <div class="input-row">
+          <input type="text" id="destination-input" placeholder="Where do you want to go?" />
+          <button class="btn-icon" id="mic-dest-btn" title="Speak destination">🎙️</button>
+          <button class="btn-primary" id="start-btn">Go</button>
+        </div>
+        <button class="btn-stop" id="stop-btn" style="display:none">⏹ Stop Navigation</button>
+      </div>
+
+      <!-- Guidance -->
+      <div id="urgency-banner" class="low">
+        <div class="urgency-icon">✅</div>
+        <div class="urgency-text" id="guidance-text">Ready. Enter a destination and press Go.</div>
+      </div>
+
+      <!-- Detections -->
+      <div class="card">
+        <div class="card-title">👁️ Object Detections</div>
+        <div id="detections-list">
+          <div class="empty">No detections yet</div>
+        </div>
+      </div>
+
+      <!-- Steps -->
+      <div class="card">
+        <div class="card-title">🗺️ Route Steps</div>
+        <div id="steps-list">
+          <div class="empty">No route loaded</div>
+        </div>
+      </div>
+
+      <!-- GPS -->
+      <div class="card">
+        <div class="card-title">📡 GPS Location</div>
+        <div class="coords">
+          Lat <span id="gps-lat">—</span>
+          Lng <span id="gps-lng">—</span>
+          Acc <span id="gps-acc">—</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Right: Map + Camera ── -->
+    <div id="right">
+      <div id="map"></div>
+
+      <div id="camera-strip">
+        <video id="camera-video" autoplay muted playsinline></video>
+        <canvas id="canvas-overlay"></canvas>
+        <canvas id="canvas-capture"></canvas>
+
+        <div class="camera-info">
+          <div class="camera-info-title">📷 Camera Feed</div>
+
+          <div class="ring-wrap">
+            <svg class="ring-svg" width="48" height="48" viewBox="0 0 36 36">
+              <circle class="ring-track" cx="18" cy="18" r="15.9" />
+              <circle class="ring-fill" id="ring-fill" cx="18" cy="18" r="15.9" />
+            </svg>
+            <div class="ring-label">
+              <strong id="ring-label-text">Idle</strong>
+              Frame interval: 1.5s
+            </div>
+          </div>
+
+          <div class="cam-controls">
+            <button class="btn-cam" id="cam-toggle-btn">📷 Start Camera</button>
+            <button class="btn-cam" id="cam-flip-btn">🔄 Flip</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<!-- Floating mic -->
+<button id="mic-btn" title="Hold to speak">🎙️</button>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  BlindBuddy Web Client
+// ════════════════════════════════════════════════════════
+const API  = `${location.protocol}//${location.hostname}:8000`;
+const WS   = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:8000/ws/session`;
+
+// ── State ────────────────────────────────────────────────
+let googleMapsKey  = '';
+let map            = null;
+let directionsRenderer = null;
+let userMarker     = null;
+let ws             = null;
+let stream         = null;
+let facingMode     = 'environment';
+let frameTimer     = null;
+let stepIndex      = 0;
+let steps          = [];
+let gpsPos         = { lat: 0, lng: 0 };
+let navigating     = false;
+let ringAnimFrame  = null;
+let mediaRecorder  = null;
+let audioChunks    = [];
+
+// ── DOM refs ─────────────────────────────────────────────
+const statusPill    = document.getElementById('status-pill');
+const statusText    = document.getElementById('status-text');
+const destInput     = document.getElementById('destination-input');
+const startBtn      = document.getElementById('start-btn');
+const stopBtn       = document.getElementById('stop-btn');
+const guidanceEl    = document.getElementById('guidance-text');
+const urgencyBanner = document.getElementById('urgency-banner');
+const detectList    = document.getElementById('detections-list');
+const stepsList     = document.getElementById('steps-list');
+const gpsLatEl      = document.getElementById('gps-lat');
+const gpsLngEl      = document.getElementById('gps-lng');
+const gpsAccEl      = document.getElementById('gps-acc');
+const video         = document.getElementById('camera-video');
+const canvas        = document.getElementById('canvas-capture');
+const ctx           = canvas.getContext('2d');
+const overlay       = document.getElementById('canvas-overlay');
+const octx          = overlay.getContext('2d');
+const ringFill      = document.getElementById('ring-fill');
+const ringLabel     = document.getElementById('ring-label-text');
+const camToggleBtn  = document.getElementById('cam-toggle-btn');
+const camFlipBtn    = document.getElementById('cam-flip-btn');
+const micBtn        = document.getElementById('mic-btn');
+const micDestBtn    = document.getElementById('mic-dest-btn');
+
+// ── Init ─────────────────────────────────────────────────
+(async function init() {
+  setStatus('Fetching config…', 'warn');
+  try {
+    const cfg = await fetch(`${API}/config`).then(r => r.json());
+    googleMapsKey = cfg.google_maps_api_key;
+    loadGoogleMaps(googleMapsKey);
+  } catch(e) {
+    setStatus('Backend unreachable', 'err');
+    console.error(e);
+    return;
+  }
+  startGPS();
+  connectWS();
+})();
+
+// ── Status pill ──────────────────────────────────────────
+function setStatus(msg, level = '') {
+  statusText.textContent = msg;
+  statusPill.className = level ? `${level}` : '';
+}
+
+// ── Google Maps loader ───────────────────────────────────
+function loadGoogleMaps(key) {
+  if (!key || key.includes('your_')) {
+    document.getElementById('map').innerHTML =
+      `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;flex-direction:column;gap:8px">
+        <span style="font-size:2rem">🗺️</span>
+        <span>Add GOOGLE_MAPS_API_KEY to .env to enable maps</span>
+       </div>`;
+    setStatus('No Maps key — GPS & guidance still work', 'warn');
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=initMap&libraries=places`;
+  script.async = true;
+  document.head.appendChild(script);
+}
+
+window.initMap = function() {
+  const center = { lat: gpsPos.lat || 28.6139, lng: gpsPos.lng || 77.2090 };
+  map = new google.maps.Map(document.getElementById('map'), {
+    center,
+    zoom: 16,
+    mapTypeId: 'roadmap',
+    styles: darkMapStyles(),
+    disableDefaultUI: false,
+    zoomControl: true,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: true,
+  });
+  directionsRenderer = new google.maps.DirectionsRenderer({
+    map,
+    suppressMarkers: false,
+    polylineOptions: { strokeColor: '#3b82f6', strokeWeight: 5, strokeOpacity: 0.9 }
+  });
+  userMarker = new google.maps.Marker({
+    map,
+    position: center,
+    title: 'You',
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8,
+            fillColor: '#3b82f6', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 }
+  });
+  
+  // Set up Places Autocomplete on the destination input
+  const destInputEl = document.getElementById('destination-input');
+  const autocomplete = new google.maps.places.Autocomplete(destInputEl);
+  autocomplete.bindTo('bounds', map);
+  autocomplete.setFields(['address_components', 'geometry', 'icon', 'name']);
+  autocomplete.addListener('place_changed', () => {
+      // Trigger navigation when a place is selected from the dropdown
+      const place = autocomplete.getPlace();
+      if (!place.geometry) return;
+      startNavigation();
+  });
+  
+  setStatus('Ready', '');
+};
+
+// ── GPS ──────────────────────────────────────────────────
+function startGPS() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(pos => {
+    gpsPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    gpsLatEl.textContent = pos.coords.latitude.toFixed(5);
+    gpsLngEl.textContent = pos.coords.longitude.toFixed(5);
+    gpsAccEl.textContent = `±${Math.round(pos.coords.accuracy)}m`;
+    if (userMarker) userMarker.setPosition(gpsPos);
+    if (map && !navigating) map.panTo(gpsPos);
+  }, err => console.warn('GPS:', err), { enableHighAccuracy: true });
+}
+
+// ── WebSocket ────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket(WS);
+  ws.onopen  = () => setStatus('Connected', '');
+  ws.onerror = () => setStatus('WS error', 'err');
+  ws.onclose = () => { setStatus('Reconnecting…', 'warn'); setTimeout(connectWS, 3000); };
+  ws.onmessage = e => handleWSMessage(JSON.parse(e.data));
+}
+
+function handleWSMessage(msg) {
+  if (msg.type === 'pong') return;
+
+  if (msg.type === 'arrived') {
+    speak('You have arrived at your destination!');
+    setGuidance('🎉 You have arrived!', 'low', '');
+    stopNavigation();
+    return;
+  }
+
+  if (msg.type === 'guidance') {
+    const { text, urgency, audio, detections, step_info } = msg;
+    setGuidance(text, urgency, urgencyIcon(urgency));
+    renderDetections(detections || []);
+    renderOverlay(detections || []);
+    if (step_info && step_info.advance) {
+      stepIndex = (step_info.next_step_index ?? stepIndex + 1);
+      renderSteps(steps, stepIndex);
+    }
+    if (audio) playBase64Audio(audio);
+  }
+
+  if (msg.type === 'error') {
+    console.error('WS error:', msg.message);
+  }
+}
+
+// ── Navigation ───────────────────────────────────────────
+startBtn.addEventListener('click', startNavigation);
+stopBtn.addEventListener('click', stopNavigation);
+destInput.addEventListener('keydown', e => { if (e.key === 'Enter') startNavigation(); });
+
+async function startNavigation() {
+  const dest = destInput.value.trim();
+  if (!dest) return;
+  if (!gpsPos.lat) { alert('Waiting for GPS…'); return; }
+
+  startBtn.disabled = true;
+  setStatus('Getting route…', 'warn');
+
+  try {
+    const res = await fetch(`${API}/navigate/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destination: dest, lat: gpsPos.lat, lng: gpsPos.lng })
+    }).then(r => r.json());
+
+    if (!res.route) throw new Error(res.detail || 'No route returned');
+
+    steps     = res.route.steps || [];
+    stepIndex = 0;
+    navigating = true;
+
+    renderSteps(steps, 0);
+    renderRouteOnMap(res.route);
+    setStatus('Navigating', '');
+    setGuidance(res.message, 'low', '✅');
+    speak(res.message);
+
+    stopBtn.style.display = 'block';
+    startBtn.disabled = false;
+
+    startCamera();
+    startFrameLoop();
+  } catch(err) {
+    setStatus('Route error', 'err');
+    setGuidance('Could not get route: ' + err.message, 'high', '🚨');
+    startBtn.disabled = false;
+  }
+}
+
+function stopNavigation() {
+  navigating = false;
+  clearInterval(frameTimer);
+  frameTimer = null;
+  steps = [];
+  stepIndex = 0;
+  stopBtn.style.display = 'none';
+  setStatus('Stopped', 'warn');
+  setGuidance('Navigation stopped.', 'low', '✅');
+  renderSteps([], 0);
+}
+
+// ── Frame loop ───────────────────────────────────────────
+function startFrameLoop() {
+  if (frameTimer) clearInterval(frameTimer);
+  sendFrame(); // immediate first frame
+  frameTimer = setInterval(sendFrame, 1500);
+  animateRing();
+}
+
+function sendFrame() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const b64 = captureFrame();
+  ws.send(JSON.stringify({
+    type: 'frame',
+    image: b64,
+    lat: gpsPos.lat,
+    lng: gpsPos.lng,
+    step_index: stepIndex,
+    steps,
+    nav_instruction: steps[stepIndex]?.text || 'Continue forward.'
+  }));
+  ringLabel.textContent = 'Analyzing…';
+}
+
+function captureFrame() {
+  if (!stream || !video.videoWidth) return '';
+  canvas.width  = 640;
+  canvas.height = 480;
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+}
+
+// ── Camera ───────────────────────────────────────────────
+camToggleBtn.addEventListener('click', toggleCamera);
+camFlipBtn.addEventListener('click', () => {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  if (stream) { stopCamera(); startCamera(); }
+});
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    video.srcObject = stream;
+    camToggleBtn.textContent = '⏹ Stop Camera';
+    camToggleBtn.classList.add('active');
+  } catch(e) {
+    console.warn('Camera:', e);
+  }
+}
+
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  camToggleBtn.textContent = '📷 Start Camera';
+  camToggleBtn.classList.remove('active');
+}
+
+function toggleCamera() {
+  stream ? stopCamera() : startCamera();
+}
+
+// ── Ring animation ───────────────────────────────────────
+function animateRing() {
+  const circumference = 100;
+  let start = null;
+  const duration = 1500;
+
+  function step(ts) {
+    if (!start) start = ts;
+    const progress = Math.min((ts - start) / duration, 1);
+    ringFill.style.strokeDashoffset = circumference * (1 - progress);
+    if (progress < 1) {
+      ringAnimFrame = requestAnimationFrame(step);
+    } else {
+      ringLabel.textContent = 'Sent ✓';
+      start = null;
+      if (navigating) ringAnimFrame = requestAnimationFrame(step);
+    }
+  }
+  cancelAnimationFrame(ringAnimFrame);
+  ringAnimFrame = requestAnimationFrame(step);
+}
+
+// ── UI helpers ───────────────────────────────────────────
+function setGuidance(text, urgency = 'low', icon = '') {
+  urgencyBanner.className = urgency || 'low';
+  urgencyBanner.querySelector('.urgency-icon').textContent = icon || urgencyIcon(urgency);
+  guidanceEl.textContent = text;
+}
+
+function urgencyIcon(u) {
+  if (u === 'high')   return '🚨';
+  if (u === 'medium') return '⚠️';
+  return '✅';
+}
+
+function renderOverlay(detections) {
+  overlay.width  = video.videoWidth || 640;
+  overlay.height = video.videoHeight || 480;
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+
+  detections.forEach(d => {
+    if (!d.bbox) return;
+    const { x, y, w, h } = d.bbox;
+    const isDoor = d.object === 'door';
+    
+    octx.strokeStyle = isDoor ? '#3b82f6' : '#10b981';
+    octx.lineWidth = 3;
+    octx.strokeRect(x, y, w, h);
+
+    octx.fillStyle = isDoor ? '#3b82f6' : '#10b981';
+    octx.font = 'bold 16px Inter, sans-serif';
+    octx.fillText(`${d.object} (${d.distance})`, x, y > 20 ? y - 10 : y + 20);
+  });
+}
+
+function renderDetections(dets) {
+  if (!dets.length) {
+    detectList.innerHTML = `<div class="empty">No objects detected</div>`;
+    return;
+  }
+  detectList.innerHTML = dets.map(d => `
+    <div class="detection-item">
+      <div>
+        <div class="det-label">${d.object}</div>
+        <div class="det-meta">${d.direction} · ${d.distance}</div>
+      </div>
+      <span class="det-badge badge-${(d.distance_m < 1.5) ? 'high' : (d.distance_m < 3) ? 'medium' : 'low'}">
+        ${d.distance_m < 1.5 ? 'HIGH' : d.distance_m < 3 ? 'MED' : 'LOW'}
+      </span>
+    </div>`
+  ).join('');
+}
+
+function renderSteps(stepsArr, current) {
+  if (!stepsArr.length) {
+    stepsList.innerHTML = `<div class="empty">No route loaded</div>`;
+    return;
+  }
+  stepsList.innerHTML = stepsArr.map((s, i) => `
+    <div class="step-item ${i === current ? 'active' : i < current ? 'done' : ''}">
+      <span class="step-num">${i + 1}</span>
+      <span>${s.text || s.instruction || JSON.stringify(s)}</span>
+    </div>`
+  ).join('');
+  const active = stepsList.querySelector('.step-item.active');
+  if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function renderRouteOnMap(route) {
+  if (!map || !directionsRenderer || !route.polyline) return;
+  // Use DirectionsService to draw on map
+  const svc = new google.maps.DirectionsService();
+  svc.route({
+    origin: { lat: gpsPos.lat, lng: gpsPos.lng },
+    destination: destInput.value.trim(),
+    travelMode: google.maps.TravelMode.WALKING,
+  }, (result, status) => {
+    if (status === 'OK') directionsRenderer.setDirections(result);
+  });
+}
+
+// ── Audio ────────────────────────────────────────────────
+function playBase64Audio(b64) {
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const blob  = new Blob([bytes], { type: 'audio/mpeg' });
+  const url   = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.play().catch(() => {});
+  audio.onended = () => URL.revokeObjectURL(url);
+}
+
+function speak(text) {
+  // Use Web Speech API as instant fallback when no audio comes from backend
+  if ('speechSynthesis' in window) {
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = 0.95;
+    speechSynthesis.speak(utt);
+  }
+}
+
+// ── Voice input (mic button) ─────────────────────────────
+micBtn.addEventListener('mousedown',  startRecording);
+micBtn.addEventListener('touchstart', startRecording, { passive: true });
+micBtn.addEventListener('mouseup',    stopRecording);
+micBtn.addEventListener('touchend',   stopRecording);
+
+micDestBtn.addEventListener('click', () => {
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    alert('Speech recognition not supported in this browser. Try Chrome.');
+    return;
+  }
+  const SR  = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new SR();
+  rec.lang  = 'en-US';
+  rec.start();
+  micDestBtn.textContent = '⏺';
+  rec.onresult = e => {
+    destInput.value = e.results[0][0].transcript;
+    micDestBtn.textContent = '🎙️';
+  };
+  rec.onerror = () => { micDestBtn.textContent = '🎙️'; };
+  rec.onend   = () => { micDestBtn.textContent = '🎙️'; };
+});
+
+async function startRecording() {
+  micBtn.classList.add('recording');
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(s);
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.start();
+  } catch(e) { console.warn('Mic:', e); }
+}
+
+async function stopRecording() {
+  micBtn.classList.remove('recording');
+  if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+  mediaRecorder.stop();
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+    const form = new FormData();
+    form.append('audio', blob, 'voice.webm');
+    try {
+      const res = await fetch(`${API}/voice/transcribe`, { method: 'POST', body: form }).then(r => r.json());
+      if (res.text) { destInput.value = res.text; startNavigation(); }
+    } catch(e) { console.warn('Transcribe:', e); }
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  };
+}
+
+// ── Dark map styles ──────────────────────────────────────
+function darkMapStyles() {
+  return [
+    { elementType: 'geometry',         stylers: [{ color: '#0f172a' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+    { elementType: 'labels.text.stroke',stylers:[{ color: '#0f172a' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0f172a' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#334155' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c1a2e' }] },
+    { featureType: 'poi',  elementType: 'geometry', stylers: [{ color: '#1e2a3a' }] },
+    { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+  ];
+}
+</script>
+</body>
+</html>

@@ -48,19 +48,29 @@ def load_model():
         _model = None
 
 
+import cv2
+import numpy as np
+
 def detect_objects(image_bytes: bytes) -> list[dict]:
     """
-    Run YOLOv8 on the given image bytes.
-    Returns a list of detected objects with direction and estimated distance.
+    Run YOLOv8 + OpenCV Door Detection on the given image bytes.
+    Returns a list of detected objects.
     """
     if _model is None:
         return []
 
     try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img_width, img_height = img.size
+        # 1. Decode image for both libraries
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img_cv2 = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img_cv2 is None:
+            return []
+            
+        img_height, img_width = img_cv2.shape[:2]
 
-        results = _model(img, conf=YOLO_CONFIDENCE, verbose=False)
+        # 2. YOLOv8 Detection
+        # Convert to RGB for PIL/YOLO if needed, but YOLO can take numpy
+        results = _model(img_cv2, conf=YOLO_CONFIDENCE, verbose=False)
         detections = []
 
         for box in results[0].boxes:
@@ -68,13 +78,10 @@ def detect_objects(image_bytes: bytes) -> list[dict]:
             cls_name = _model.names[cls_id].lower()
             conf = float(box.conf[0])
 
-            # Bounding box (x1, y1, x2, y2) in pixels
             x1, y1, x2, y2 = box.xyxy[0].tolist()
-            box_width = x2 - x1
             box_height = y2 - y1
             cx = (x1 + x2) / 2
 
-            # Direction: left / center / right based on center x relative to image width
             if cx < img_width * 0.35:
                 direction = "left"
             elif cx > img_width * 0.65:
@@ -82,24 +89,44 @@ def detect_objects(image_bytes: bytes) -> list[dict]:
             else:
                 direction = "ahead"
 
-            # Rough distance estimate: larger boxes = closer objects
-            # Assumes a 'person' filling ~50% of frame height ≈ 1.5m
             box_fraction = box_height / img_height
             est_distance_m = max(0.5, round(1.5 / max(box_fraction, 0.1), 1))
 
-            friendly_name = HAZARD_CLASSES.get(cls_name, cls_name)
-
             detections.append({
-                "object": friendly_name,
+                "object": HAZARD_CLASSES.get(cls_name, cls_name),
                 "raw_class": cls_name,
                 "direction": direction,
                 "distance": f"{est_distance_m} meters",
                 "distance_m": est_distance_m,
                 "confidence": round(conf, 2),
-                "bbox": {"x1": round(x1), "y1": round(y1), "x2": round(x2), "y2": round(y2)},
+                "bbox": {"x": round(x1), "y": round(y1), "w": round(x2 - x1), "h": round(y2 - y1)},
             })
 
-        # Sort by distance ascending (closest first)
+        # 3. Friend's Door Detection Logic
+        door_boxes = _detect_doors_logic(img_cv2)
+        for (dx, dy, dw, dh) in door_boxes:
+            # Simple heuristic for door distance: usually ~2m if it occupies a fair chunk of height
+            door_fraction = dh / img_height
+            dist_m = max(1.0, round(2.0 / max(door_fraction, 0.2), 1))
+            
+            dcx = dx + (dw / 2)
+            if dcx < img_width * 0.35:
+                ddir = "left"
+            elif dcx > img_width * 0.65:
+                ddir = "right"
+            else:
+                ddir = "ahead"
+
+            detections.append({
+                "object": "door",
+                "raw_class": "door",
+                "direction": ddir,
+                "distance": f"{dist_m} meters",
+                "distance_m": dist_m,
+                "confidence": 0.8, # Estimated confidence for contour detection
+                "bbox": {"x": dx, "y": dy, "w": dw, "h": dh},
+            })
+
         detections.sort(key=lambda d: d["distance_m"])
         return detections
 
@@ -107,6 +134,29 @@ def detect_objects(image_bytes: bytes) -> list[dict]:
         print(f"Vision detection error: {e}")
         return []
 
+def _detect_doors_logic(image):
+    """Friend's logic for detecting doors using OpenCV contours."""
+    try:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 50, 150)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        dilated = cv2.dilate(edges, kernel, iterations=2)
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        door_boxes = []
+        img_h, img_w = image.shape[:2]
+
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)
+            area = w * h
+            aspect = h / float(w) if w != 0 else 0
+            rel_area = area / float(img_h * img_w)
+            if 1.5 < aspect < 4.5 and 0.02 < rel_area < 0.40 and w > 40 and h > 80:
+                door_boxes.append((x, y, w, h))
+        return door_boxes
+    except:
+        return []
 
 def detect_objects_from_base64(b64_image: str) -> list[dict]:
     """Convenience wrapper that accepts base64-encoded image strings."""

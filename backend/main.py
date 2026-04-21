@@ -3,10 +3,14 @@ BlindBuddy Backend — Main FastAPI Application
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
+import os
 
 from routers import navigation_router, vision_router, reasoning_router, voice_router, ws_router
 from modules.vision import load_model
+from config import GOOGLE_MAPS_API_KEY
 
 
 @asynccontextmanager
@@ -46,6 +50,20 @@ app.include_router(ws_router.router, tags=["WebSocket Session"])
 @app.get("/health", summary="Health check")
 async def health():
     return {"status": "ok", "service": "BlindBuddy"}
+
+
+@app.get("/config", summary="Frontend config (public keys)", tags=["Config"])
+async def frontend_config():
+    """Returns public configuration needed by the web frontend."""
+    return {"google_maps_api_key": GOOGLE_MAPS_API_KEY}
+
+
+# Serve web frontend — must be last so API routes take priority
+_HERE    = os.path.dirname(os.path.abspath(__file__))
+WEB_DIR  = os.path.abspath(os.path.join(_HERE, "..", "frontend", "web"))
+print(f"📁 Web frontend dir: {WEB_DIR} (exists={os.path.isdir(WEB_DIR)})")
+if os.path.isdir(WEB_DIR):
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 
 
 if __name__ == "__main__":
